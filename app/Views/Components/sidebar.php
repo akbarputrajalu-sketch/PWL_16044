@@ -16,6 +16,13 @@
                 <span>Keranjang</span>
             </a>
         </li><!-- End Keranjang Nav --> 
+        <!-- Menu Profile -->
+        <li class="nav-item">
+            <a class="nav-link <?php echo (uri_string() == 'profil') ? "" : "collapsed" ?>" href="<?= base_url('profil') ?>">
+                <i class="bi bi-person-circle"></i>
+                <span>Profile</span>
+            </a>
+        </li><!-- End Profile Nav -->
         <?php
 if (session()->get('role') == 'admin') {
 ?>
@@ -24,7 +31,7 @@ if (session()->get('role') == 'admin') {
                 <i class="bi bi-receipt"></i>
                 <span>Produk</span>
             </a>
-        </li><!-- End Produk Nav --> 
+        </li><!-- End Produk Nav -->    
         <?php
         }
         ?>      
