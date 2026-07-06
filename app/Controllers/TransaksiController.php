@@ -15,44 +15,44 @@ class TransaksiController extends BaseController
     protected $transactionModel;
 protected $transactionDetailModel;
 
-public function __construct()
-{
-    helper(['number', 'form']);
-    $this->cart = service('cart');
-    $this->transactionModel = new TransactionModel();
-$this->transactionDetailModel = new TransactionDetailModel(); 
-}
+    public function __construct()
+    {
+        helper(['number', 'form', 'transaksi']);
+        $this->cart = service('cart');
+        $this->transactionModel = new TransactionModel();
+        $this->transactionDetailModel = new TransactionDetailModel(); 
+    }
     public function index()
-{  
+{
     $data = [
         'items' => $this->cart->contents(),
         'total' => $this->cart->total()
-        ];
+    ];
 
     return view('v_keranjang', $data);
 }
 
-public function cart_add()
-{
-	$this->cart->insert([
-	    'id'      => $this->request->getPost('id'),
-	    'qty'     => 1,
-	    'price'   => $this->request->getPost('harga'),
-	    'name'    => $this->request->getPost('nama'),
-	    'options' => [
-	        'foto' => $this->request->getPost('foto')
-	    ]
-	]);
-	
-	session()->setFlashdata(
-	    'success',
-	    'Produk berhasil ditambahkan ke keranjang. 
-	    <a href="' . base_url('keranjang') . '">Lihat</a>'
-	);
-	
-	return redirect()->to(base_url('/'));
-} 
-public function cart_edit()
+    public function cart_add()
+    {
+        $this->cart->insert([
+            'id'      => $this->request->getPost('id'),
+            'qty'     => 1,
+            'price'   => $this->request->getPost('harga'),
+            'name'    => $this->request->getPost('nama'),
+            'options' => [
+                'foto' => $this->request->getPost('foto')
+            ]
+        ]);
+        
+        session()->setFlashdata(
+            'success',
+            'Produk berhasil ditambahkan ke keranjang. 
+            <a href="' . base_url('keranjang') . '">Lihat</a>'
+        );
+        
+        return redirect()->to(base_url('/'));
+    }
+    public function cart_edit()
 {
     $i = 1;
     foreach ($this->cart->contents() as $item) {
@@ -93,11 +93,9 @@ public function cart_clear()
 
     return redirect()->to(base_url('keranjang'));
 }
+
 public function checkout()
 {  
-    $service = new RajaOngkirService();
-$response = $service->getDestination('semarang');
-$response2 = $service->getCost('64999','65042','1000','jne');
     $data = [
         'items' => $this->cart->contents(),
         'total' => $this->cart->total() 
@@ -109,18 +107,24 @@ public function destinations()
 {
     $search = $this->request->getGet('q'); 
 
-    $service = new RajaOngkirService();
-$response = $service->getDestination($search);
-
-$results = [];
-$data = $response['data'] ?? [];
-
-foreach ($data as $item) {
-    $results[] = [
-        'id'   => $item['id'],
-        'text' => $item['label']
-    ];
+        if (empty($search)) {
+    return $this->response->setJSON([
+        'results' => []
+    ]);
 }
+
+        $service = new RajaOngkirService();
+        $response = $service->getDestination($search);
+
+        $results = [];
+        $data = $response['data'] ?? [];
+
+        foreach ($data as $item) {
+            $results[] = [
+                'id'   => $item['id'],
+                'text' => $item['label']
+            ];
+        }
 
     return $this->response->setJSON([
         'results' => $results
@@ -150,6 +154,7 @@ public function costs()
 
     return $this->response->setJSON($results);
 }
+
 public function buy()
 { 
     $cartItems = $this->cart->contents();
@@ -166,16 +171,26 @@ public function buy()
         $subtotal += $item['qty'] * $item['price'];
     }
 
-    $ongkir = (int) $this->request->getPost('ongkir');
+    $ongkir      = (int) $this->request->getPost('ongkir');
+$voucherCode = $this->request->getPost('voucher_code');
 
-    $transaction = [
-        'username'    => $this->request->getPost('username'),
-        'alamat'      => $this->request->getPost('alamat'),
-        'ongkir'      => $ongkir,
-        'total_harga' => $subtotal + $ongkir,
-        'status'      => 0, 
-    ];
+$ppn           = hitung_ppn($subtotal);
+$biayaAdmin    = hitung_biaya_admin($subtotal);
+$diskonVoucher = hitung_diskon_voucher($subtotal, $voucherCode);
 
+$grandTotal = $subtotal - $diskonVoucher + $ppn + $biayaAdmin + $ongkir;
+
+$transaction = [
+    'username'       => $this->request->getPost('username'),
+    'alamat'         => $this->request->getPost('alamat'),
+    'ongkir'         => $ongkir,
+    'total_harga'    => $grandTotal,
+    'ppn'            => $ppn,
+    'biaya_admin'    => $biayaAdmin,
+    'voucher_code'   => $diskonVoucher > 0 ? strtoupper(trim($voucherCode)) : null,
+    'diskon_voucher' => $diskonVoucher,
+    'status'         => 0, 
+];
     // insert transaction
     if (!$this->transactionModel->insert($transaction)) {
         $db->transRollback();
@@ -205,6 +220,7 @@ public function buy()
     $this->cart->destroy();
     return redirect()->to(base_url());
 }
+
 public function history()
 {
     $username = session()->get('username'); 
